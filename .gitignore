@@ -1,0 +1,8 @@
+# clangd compile database (symlinked into each package from the colcon build tree)
+compile_commands.json
+
+# colcon / CMake build artifacts, should any land inside the source tree
+build/
+install/
+log/
+references/

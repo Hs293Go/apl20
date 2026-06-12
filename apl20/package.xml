@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>apl20</name>
+  <version>0.0.0</version>
+  <description>
+    Pure-math autopilot kernels (PID rate control). No ROS dependencies;
+    reusable in non-ROS contexts. Built as a plain CMake package.
+  </description>
+  <maintainer email="hellston20a@gmail.com">hs293go</maintainer>
+  <license>TODO: License declaration</license>
+
+  <buildtool_depend>cmake</buildtool_depend>
+
+  <depend>eigen</depend>
+
+  <test_depend>gtest</test_depend>
+
+  <export>
+    <build_type>cmake</build_type>
+  </export>
+</package>

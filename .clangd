@@ -1,0 +1,12 @@
+---
+CompileFlags:
+  # Eigen encapsulates openmp well so analyzing openmp adds no value. On the
+  # other hand, systems don't agree on whether to put omp.h in /usr/include or
+  # architecture or version-specific subdirectories, so clangd sometimes failes
+  # to find omp.h. This breaks all analysis downstream of Eigen, so it's easier
+  # to tell clangd to assume no parallelization whn analyzing.
+  Add:
+    - -DEIGEN_DONT_PARALLELIZE
+    # This is a C++20 codebase (std::numbers, concepts, ...). Pin the standard so
+    # clangd analyzes correctly even before a compile_commands.json exists.
+    - -std=c++20
