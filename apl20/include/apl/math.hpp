@@ -5,14 +5,23 @@
 #include <Eigen/Geometry>
 #include <cmath>
 
-
 namespace apl {
 
-// SO(3) logarithm of a unit quaternion: the rotation vector theta * axis, whose
-// magnitude is the true rotation angle (wrapped to (-pi, pi]). This is Ceres's
-// QuaternionToAngleAxis. Unlike 2 * vec(q) = 2 sin(theta/2) * axis, it is
-// linear in the angle, so large attitude errors are not compressed by the
-// half-angle sine. Precondition: `quaternion` is (approximately) unit.
+template <typename T>
+constexpr T deg2rad(T deg) {
+  return deg * std::numbers::pi_v<T> / T(180);
+}
+
+template <typename T>
+constexpr T rad2deg(T rad) {
+  return rad * T(180) / std::numbers::pi_v<T>;
+}
+
+// SO(3) logarithm of a unit quaternion: the rotation vector theta * axis,
+// whose magnitude is the true rotation angle (wrapped to (-pi, pi]). This is
+// Ceres's QuaternionToAngleAxis. Unlike 2 * vec(q) = 2 sin(theta/2) * axis,
+// it is linear in the angle, so large attitude errors are not compressed by
+// the half-angle sine. Precondition: `quaternion` is (approximately) unit.
 template <typename Derived>
 Eigen::Vector3<typename Derived::Scalar> QuaternionToAngleAxis(
     const Eigen::QuaternionBase<Derived>& quaternion) {

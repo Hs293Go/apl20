@@ -41,7 +41,7 @@ struct PositionControllerCfg {
 
   double gravity = 9.80665;
   std::optional<double> tilt_max =
-      0.7853981633974483;   // max tilt from vertical [rad]
+      deg2rad(45.0);        // max tilt from vertical [rad]
   double thrust_min = 0.1;  // collective thrust clamp [0,1]
   double thrust_max = 0.9;
 };

@@ -15,11 +15,12 @@ struct AttitudeReferenceCfg {
   double input_tc = 0.15;  // input-shaping time constant [s]
   // Max angular acceleration / velocity per body axis (ArduPilot defaults:
   // ~1100 deg/s^2 roll/pitch, ~270 deg/s^2 yaw).
-  Eigen::Vector3d ang_accel_max = {19.2, 19.2, 4.71};
+  Eigen::Vector3d ang_accel_max = {deg2rad(1100.0), deg2rad(1100.0),
+                                   deg2rad(270.0)};
   Eigen::Vector3d ang_vel_max = Eigen::Vector3d::Constant(20);  // [rad/s]
   // Tilt (thrust) error [rad] at which the feedforward starts to be
   // de-prioritized (fully gone by 2x this). 30 deg, per ArduPilot.
-  double ff_threshold = 0.5235987755982988;
+  double ff_threshold = deg2rad(30.0);
   bool feedforward = true;
 };
 
