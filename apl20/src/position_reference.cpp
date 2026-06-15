@@ -11,16 +11,18 @@ PositionReference::PositionReference(const PositionReferenceCfg& cfg)
       vel_sqrt_(Eigen::Array3d::Constant(cfg.kp_vel), cfg.jerk_max.array()),
       accel_slew_(cfg.jerk_max.array()) {}
 
-void PositionReference::reset(const Eigen::Vector3d& position,
-                              const Eigen::Vector3d& velocity, double yaw) {
+void PositionReference::reset(const Eigen::Ref<const Eigen::Vector3d>& position,
+                              const Eigen::Ref<const Eigen::Vector3d>& velocity,
+                              double yaw) {
   pos_target_ = position;
   vel_target_ = velocity;
   accel_target_.setZero();
   yaw_target_ = yaw;
 }
 
-PositionSetpoint PositionReference::update(const Eigen::Vector3d& desired_pos,
-                                           double desired_yaw, double dt) {
+PositionSetpoint PositionReference::update(
+    const Eigen::Ref<const Eigen::Vector3d>& desired_pos, double desired_yaw,
+    double dt) {
   // Position error -> velocity setpoint: sqrt controller decelerating at
   // accel_max (finite-time, no overshoot), clamped to vel_max.
   Eigen::Array3d vel_sp =

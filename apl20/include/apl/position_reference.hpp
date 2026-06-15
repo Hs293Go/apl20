@@ -48,14 +48,14 @@ class PositionReference {
 
   // Seed the target at the current state (call on (re)start / takeoff so the
   // first step emits no velocity or acceleration spike).
-  void reset(const Eigen::Vector3d& position, const Eigen::Vector3d& velocity,
-             double yaw);
+  void reset(const Eigen::Ref<const Eigen::Vector3d>& position,
+             const Eigen::Ref<const Eigen::Vector3d>& velocity, double yaw);
 
   // Advance the achievable trajectory one step toward the fixed target pose
   // (`desired_pos` NED, `desired_yaw` heading [rad]) and emit it as a
   // PositionSetpoint (position + velocity/acceleration feedforward + heading)
   // for the PositionController.
-  PositionSetpoint update(const Eigen::Vector3d& desired_pos,
+  PositionSetpoint update(const Eigen::Ref<const Eigen::Vector3d>& desired_pos,
                           double desired_yaw, double dt);
 
  private:

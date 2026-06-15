@@ -41,11 +41,11 @@ AttitudeSetpoint AttitudeReference::update(const Eigen::Quaterniond& desired,
   return {.attitude = attitude_target_, .ang_vel_ff = ang_vel_target_};
 }
 
-Eigen::Vector3d CombineAttitudeRate(const Eigen::Vector3d& corrective,
-                                    const Eigen::Vector3d& feedforward,
-                                    const Eigen::Vector3d& measured_rate,
-                                    double thrust_error_angle,
-                                    double threshold) {
+Eigen::Vector3d CombineAttitudeRate(
+    const Eigen::Ref<const Eigen::Vector3d>& corrective,
+    const Eigen::Ref<const Eigen::Vector3d>& feedforward,
+    const Eigen::Ref<const Eigen::Vector3d>& measured_rate,
+    double thrust_error_angle, double threshold) {
   Eigen::Vector3d out;
   if (thrust_error_angle > 2 * threshold) {
     // Large tilt error: thrust-axis correction only, hold yaw to the gyro.

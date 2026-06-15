@@ -66,11 +66,11 @@ class AttitudeReference {
 // ArduPilot's feedforward_scalar. NOTE: the FSC-Lab port computed this blend
 // and then returned the un-blended feedback, so the large-error path never ran;
 // here the blended result is actually returned.
-Eigen::Vector3d CombineAttitudeRate(const Eigen::Vector3d& corrective,
-                                    const Eigen::Vector3d& feedforward,
-                                    const Eigen::Vector3d& measured_rate,
-                                    double thrust_error_angle,
-                                    double threshold);
+Eigen::Vector3d CombineAttitudeRate(
+    const Eigen::Ref<const Eigen::Vector3d>& corrective,
+    const Eigen::Ref<const Eigen::Vector3d>& feedforward,
+    const Eigen::Ref<const Eigen::Vector3d>& measured_rate,
+    double thrust_error_angle, double threshold);
 
 }  // namespace apl
 

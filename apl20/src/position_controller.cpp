@@ -33,15 +33,16 @@ PositionController::PositionController(const PositionControllerCfg& cfg)
   sat_lo_.setZero();
 }
 
-void PositionController::reset(const Eigen::Vector3d& vel) {
+void PositionController::reset(const Eigen::Ref<const Eigen::Vector3d>& vel) {
   vel_pid_.reset(vel_state_, vel.array());
   sat_hi_.setZero();
   sat_lo_.setZero();
 }
-PositionControllerOutput PositionController::update(const Eigen::Vector3d& pos,
-                                                    const Eigen::Vector3d& vel,
-                                                    const PositionSetpoint& sp,
-                                                    double dt) {
+
+PositionControllerOutput PositionController::update(
+    const Eigen::Ref<const Eigen::Vector3d>& pos,
+    const Eigen::Ref<const Eigen::Vector3d>& vel, const PositionSetpoint& sp,
+    double dt) {
   using std::cos;
   using std::sin;
 
@@ -81,8 +82,8 @@ PositionControllerOutput PositionController::update(const Eigen::Vector3d& pos,
   // Latch thrust saturation for next step's conditional anti-windup on the z
   // velocity integrator: at max thrust the integrator may not demand more
   // climb (more negative acc_z); at min, not more descent.
-  sat_hi_ = Mask(false, false, collective <= cfg_.thrust_min);
-  sat_lo_ = Mask(false, false, collective >= cfg_.thrust_max);
+  sat_hi_ << false, false, collective <= cfg_.thrust_min;
+  sat_lo_ << false, false, collective >= cfg_.thrust_max;
 
   PositionControllerOutput out;
   out.attitude_setpoint = attitudeFromBodyZ(body_z, sp.yaw);
@@ -91,7 +92,7 @@ PositionControllerOutput PositionController::update(const Eigen::Vector3d& pos,
   return out;
 }
 
-void PositionController::limitTilt(Eigen::Vector3d& body_z) const {
+void PositionController::limitTilt(Eigen::Ref<Eigen::Vector3d> body_z) const {
   using std::cos;
   using std::sin;
   if (cfg_.tilt_max.has_value()) {

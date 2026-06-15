@@ -73,17 +73,17 @@ class PositionController {
   const PositionControllerCfg& cfg() const { return cfg_; }
 
   // Re-prime the velocity integrator/derivative from the current velocity.
-  void reset(const Eigen::Vector3d& vel);
+  void reset(const Eigen::Ref<const Eigen::Vector3d>& vel);
 
   // One step. `pos`, `vel` are the measured NED position/velocity; `sp` the
   // reference; `dt` the timestep [s]. Returns the thrust + attitude setpoint.
-  PositionControllerOutput update(const Eigen::Vector3d& pos,
-                                  const Eigen::Vector3d& vel,
+  PositionControllerOutput update(const Eigen::Ref<const Eigen::Vector3d>& pos,
+                                  const Eigen::Ref<const Eigen::Vector3d>& vel,
                                   const PositionSetpoint& sp, double dt);
 
  private:
   // Clamp body_z to within tilt_max of vertical (0,0,1), preserving heading.
-  void limitTilt(Eigen::Vector3d& body_z) const;
+  void limitTilt(Eigen::Ref<Eigen::Vector3d> body_z) const;
 
   PositionControllerCfg cfg_;
   Pid<double, 3> vel_pid_;
