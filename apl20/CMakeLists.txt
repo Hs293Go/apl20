@@ -47,6 +47,7 @@ target_sources(
             include
             FILES
             include/apl/math.hpp
+            include/apl/control_ops.hpp
             include/apl/filters.hpp)
 target_compile_features(apl20_math INTERFACE cxx_std_20)
 target_link_libraries(apl20_math INTERFACE Eigen3::Eigen)

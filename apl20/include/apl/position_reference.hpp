@@ -4,8 +4,8 @@
 #include <cmath>
 
 #include "Eigen/Dense"
+#include "apl/control_ops.hpp"
 #include "apl/filters.hpp"
-#include "apl/math.hpp"
 #include "apl/position_controller.hpp"
 
 namespace apl {

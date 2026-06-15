@@ -3,6 +3,7 @@
 
 #include "Eigen/Core"
 #include "Eigen/Geometry"
+#include "apl/control_ops.hpp"
 #include "apl/math.hpp"
 
 namespace apl {

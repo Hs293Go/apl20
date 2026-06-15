@@ -5,6 +5,7 @@
 
 #include "Eigen/Core"
 #include "Eigen/Geometry"
+#include "apl/math.hpp"
 #include "apl/pid.hpp"
 
 namespace apl {

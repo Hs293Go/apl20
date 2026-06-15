@@ -1,4 +1,5 @@
 #include "apl/attitude_reference.hpp"
+
 namespace apl {
 namespace {
 auto xy() { return Eigen::seqN(0, Eigen::fix<2>); }
