@@ -90,17 +90,21 @@ PositionControllerOutput PositionController::update(const Eigen::Vector3d& pos,
   out.acceleration_setpoint = acc_sp;
   return out;
 }
+
 void PositionController::limitTilt(Eigen::Vector3d& body_z) const {
   using std::cos;
   using std::sin;
-  const double cos_max = cos(cfg_.tilt_max);
-  if (body_z.z() < cos_max) {
-    Eigen::Vector3d horizontal(body_z.x(), body_z.y(), 0);
-    const double horizontal_norm = horizontal.norm();
-    if (horizontal_norm > 1e-9) {
-      horizontal *= sin(cfg_.tilt_max) / horizontal_norm;
+  if (cfg_.tilt_max.has_value()) {
+    const auto& tilt_max = cfg_.tilt_max.value();
+    const double cos_max = cos(tilt_max);
+    if (body_z.z() < cos_max) {
+      Eigen::Vector3d horizontal(body_z.x(), body_z.y(), 0);
+      const double horizontal_norm = horizontal.norm();
+      if (horizontal_norm > 1e-9) {
+        horizontal *= sin(tilt_max) / horizontal_norm;
+      }
+      body_z = Eigen::Vector3d(horizontal.x(), horizontal.y(), cos_max);
     }
-    body_z = Eigen::Vector3d(horizontal.x(), horizontal.y(), cos_max);
   }
 }
 }  // namespace apl

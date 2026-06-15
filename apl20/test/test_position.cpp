@@ -108,7 +108,8 @@ TEST(PositionController, TiltLimit) {
   const Eigen::Vector3d body_z =
       out.attitude_setpoint * Eigen::Vector3d::UnitZ();
   const double tilt = std::acos(std::clamp(body_z.z(), -1.0, 1.0));
-  EXPECT_NEAR(tilt, pc.cfg().tilt_max, 1e-6) << "tilt clamps to tilt_max";
+  EXPECT_NEAR(tilt, pc.cfg().tilt_max.value(), 1e-6)
+      << "tilt clamps to tilt_max";
 }
 
 }  // namespace
