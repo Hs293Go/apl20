@@ -11,7 +11,7 @@ namespace apl20_ros {
 
 // The "planner" half of the controller/commander split, fully decoupled from
 // the autopilot. It builds a waypoint pattern (hover, square, lawnmower) in
-// absolute local NED and publishes it ONCE as a latched nav_msgs/Path on
+// absolute local ENU and publishes it ONCE as a latched nav_msgs/Path on
 // setpoint_path/local; the autopilot then sequences + tracks it (advancement
 // and tracking live there now). No pose feedback, no per-cycle streaming -- so
 // it runs in its own launch and can be killed once the path is delivered (the

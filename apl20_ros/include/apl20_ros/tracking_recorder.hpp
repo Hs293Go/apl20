@@ -10,7 +10,7 @@ namespace apl20_ros {
 // Records waypoint-tracking performance to a CSV file for offline analysis.
 // Each row is one control cycle: the shaped reference the controller is
 // tracking, the measured pose, and the position/heading errors -- enough to
-// compute per-leg RMS error, settling time, overshoot, etc. NED throughout.
+// compute per-leg RMS error, settling time, overshoot, etc. ENU throughout.
 //
 // An empty path disables recording (enabled() == false), so the node can always
 // construct one and call record() unconditionally.

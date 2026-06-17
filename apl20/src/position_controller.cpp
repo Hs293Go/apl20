@@ -4,7 +4,10 @@
 
 namespace apl {
 namespace {
-// Desired attitude from the body-z (thrust down-axis) and a heading.
+// Desired attitude from the body-z (FLU thrust up-axis) and a heading. The
+// cross-product construction is frame-agnostic: ENU/FLU and NED/FRD are both
+// right-handed, so the same formulas yield a valid rotation -- only body_z's
+// physical meaning (up vs down) differs, and that is set by the caller.
 Eigen::Quaternion<double> attitudeFromBodyZ(const Eigen::Vector3d& body_z,
                                             double yaw) {
   using std::cos;
@@ -60,12 +63,13 @@ PositionControllerOutput PositionController::update(
       vel_pid_.update(vel_state_, vel_sp.array(), vel.array(), dt, mods);
   const Eigen::Vector3d acc_sp = terms.output().matrix() + sp.acceleration_ff;
 
-  // 3. Acceleration -> thrust vector -> (collective, attitude). In NED the
-  //    thrust must provide specific force (acc_sp - g); the desired body z
-  //    (down axis) points opposite, along (g - acc_sp).
-  // Imperative style is the most efficient here: Start by setting body_z to
-  // the negated acceleration setpoint, then add gravity and normalize
-  Eigen::Vector3d body_z = -acc_sp;
+  // 3. Acceleration -> thrust vector -> (collective, attitude). In ENU the
+  //    thrust must provide specific force (acc_sp - g, with g =
+  //    (0,0,-gravity)); the desired body z (FLU up axis) points along it, i.e.
+  //    (acc_sp + gravity*e_z). Imperative style is the most efficient here:
+  //    start from the acceleration setpoint, add gravity on the up axis, and
+  //    normalize.
+  Eigen::Vector3d body_z = acc_sp;
   body_z.z() += cfg_.gravity;
   body_z.normalize();
   limitTilt(body_z);
@@ -73,17 +77,17 @@ PositionControllerOutput PositionController::update(
   // Collective thrust: hover_thrust scaled by the demanded vertical specific
   // force, boosted by 1/cos(tilt) so the vertical component is held while
   // tilted (PX4's angle boost).
-  const double thrust_z = acc_sp.z() * (cfg_.hover_thrust / cfg_.gravity) -
-                          cfg_.hover_thrust;  // <= 0 (up is -z)
-  const double collective_raw = -thrust_z / body_z.z();
+  const double thrust_z = acc_sp.z() * (cfg_.hover_thrust / cfg_.gravity) +
+                          cfg_.hover_thrust;  // >= 0 (up is +z)
+  const double collective_raw = thrust_z / body_z.z();
   const double collective =
       std::clamp(collective_raw, cfg_.thrust_min, cfg_.thrust_max);
 
   // Latch thrust saturation for next step's conditional anti-windup on the z
   // velocity integrator: at max thrust the integrator may not demand more
-  // climb (more negative acc_z); at min, not more descent.
-  sat_hi_ << false, false, collective <= cfg_.thrust_min;
-  sat_lo_ << false, false, collective >= cfg_.thrust_max;
+  // climb (more positive acc_z); at min, not more descent.
+  sat_hi_ << false, false, collective >= cfg_.thrust_max;
+  sat_lo_ << false, false, collective <= cfg_.thrust_min;
 
   PositionControllerOutput out;
   out.attitude_setpoint = attitudeFromBodyZ(body_z, sp.yaw);

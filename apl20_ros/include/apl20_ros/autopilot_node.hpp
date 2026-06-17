@@ -21,6 +21,7 @@
 #include "apl/attitude_controller.hpp"
 #include "apl/attitude_reference.hpp"
 #include "apl/control_allocator.hpp"
+#include "apl/conversions.hpp"
 #include "apl/position_controller.hpp"
 #include "apl/position_reference.hpp"
 #include "apl/rate_controller.hpp"
@@ -37,7 +38,7 @@ namespace apl20_ros {
 // or a bare `ros2 topic pub`) supplies them on MAVROS-style topics, and the
 // most recently received one selects the active mode:
 //
-//   ~/setpoint_position/local (geometry_msgs/PoseStamped, NED; yaw from the
+//   ~/setpoint_position/local (geometry_msgs/PoseStamped, ENU; yaw from the
 //       quaternion heading)  -> PositionReference -> the full cascade.
 //   ~/setpoint_path/local    (nav_msgs/Path, latched) -> a multi-waypoint
 //       mission the autopilot sequences through (advancing once settled within
@@ -46,8 +47,11 @@ namespace apl20_ros {
 //       controller (orientation + thrust) or, with IGNORE_ATTITUDE, the rate
 //       controller directly (body_rate + thrust).
 //
-// VehicleLocalPosition (NED) feeds the position loop; VehicleOdometry (attitude
-// q + body rates) feeds the inner loops and is the loop clock. Until armed and
+// VehicleLocalPosition (PX4 NED) and VehicleOdometry (PX4 FRD->NED attitude q +
+// FRD body rates) are converted to ENU/FLU at ingestion (the only frame
+// boundary; the whole cascade is ENU/FLU). VehicleLocalPosition feeds the
+// position loop; VehicleOdometry feeds the inner loops and is the loop clock.
+// Until armed and
 // climbed past `takeoff_alt`, a takeoff guard holds the start xy + heading and
 // only climbs (the grounded vehicle cannot yaw/translate without the saturated
 // torque starving the climb), so a bare position `topic pub` lifts off cleanly.
@@ -62,7 +66,7 @@ class AutopilotNode : public rclcpp::Node {
   // Active setpoint level -- selected by the most recently received setpoint.
   enum class Mode { kIdle, kPosition, kPath, kAttitude, kRate };
   struct Waypoint {
-    Eigen::Vector3d pos = Eigen::Vector3d::Zero();  // NED [m]
+    Eigen::Vector3d pos = Eigen::Vector3d::Zero();  // ENU [m]
     double yaw = 0.0;                               // heading [rad]
   };
 
@@ -121,7 +125,7 @@ class AutopilotNode : public rclcpp::Node {
   Mode mode_ = Mode::kIdle;
   std::optional<rclcpp::Time> setpoint_stamp_;
   double setpoint_timeout_ = 0.5;  // [s] beyond which a setpoint is stale
-  Eigen::Vector3d sp_pos_ = Eigen::Vector3d::Zero();  // NED [m]
+  Eigen::Vector3d sp_pos_ = Eigen::Vector3d::Zero();  // ENU [m]
   double sp_yaw_ = 0.0;                               // [rad]
   Eigen::Quaterniond sp_att_ = Eigen::Quaterniond::Identity();
   Eigen::Vector3d sp_rate_ = Eigen::Vector3d::Zero();  // body [rad/s]
@@ -133,8 +137,8 @@ class AutopilotNode : public rclcpp::Node {
   double accept_radius_ = 0.4;  // advance within this of a waypoint [m]
   double settle_speed_ = 0.4;   // ... and slower than this [m/s]
 
-  Eigen::Vector3d pos_ned_ = Eigen::Vector3d::Zero();
-  Eigen::Vector3d vel_ned_ = Eigen::Vector3d::Zero();
+  Eigen::Vector3d pos_enu_ = Eigen::Vector3d::Zero();
+  Eigen::Vector3d vel_enu_ = Eigen::Vector3d::Zero();
   double heading_ = 0.0;  // current vehicle heading [rad]
   bool have_local_ = false;
 

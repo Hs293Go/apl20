@@ -48,6 +48,7 @@ target_sources(
             FILES
             include/apl/math.hpp
             include/apl/control_ops.hpp
+            include/apl/conversions.hpp
             include/apl/filters.hpp)
 target_compile_features(apl20_math INTERFACE cxx_std_20)
 target_link_libraries(apl20_math INTERFACE Eigen3::Eigen)
@@ -162,6 +163,7 @@ if(BUILD_TESTING)
 
   apl_add_gtest(test_pid apl20::rate_control)
   apl_add_gtest(test_filters apl20::math)
+  apl_add_gtest(test_conversions apl20::math)
   apl_add_gtest(test_attitude apl20::attitude_control)
   apl_add_gtest(test_attitude_reference apl20::attitude_control)
   apl_add_gtest(test_position apl20::position_control)

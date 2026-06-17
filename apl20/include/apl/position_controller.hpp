@@ -11,11 +11,11 @@
 
 namespace apl {
 
-// Reference for the position controller (NED). A bare hover/goto fills only
+// Reference for the position controller (ENU). A bare hover/goto fills only
 // `position` and `yaw`; a waypoint/trajectory generator also fills the velocity
 // and acceleration feedforwards.
 struct PositionSetpoint {
-  Eigen::Vector3d position = Eigen::Vector3d::Zero();     // [m] NED
+  Eigen::Vector3d position = Eigen::Vector3d::Zero();     // [m] ENU
   Eigen::Vector3d velocity_ff = Eigen::Vector3d::Zero();  // [m/s] feedforward
   Eigen::Vector3d acceleration_ff =
       Eigen::Vector3d::Zero();  // [m/s^2] feedforward
@@ -64,7 +64,7 @@ struct PositionControllerOutput {
 // stack; its attitude setpoint feeds AttitudeController.
 //
 // Owns the velocity PID's integrator state, so it is a stateful driver around
-// the stateless Pid kernel (like RateController). All quantities are NED.
+// the stateless Pid kernel (like RateController). All quantities are ENU/FLU.
 class PositionController {
  public:
   using Mask = Eigen::Array<bool, 3, 1>;
@@ -75,14 +75,15 @@ class PositionController {
   // Re-prime the velocity integrator/derivative from the current velocity.
   void reset(const Eigen::Ref<const Eigen::Vector3d>& vel);
 
-  // One step. `pos`, `vel` are the measured NED position/velocity; `sp` the
+  // One step. `pos`, `vel` are the measured ENU position/velocity; `sp` the
   // reference; `dt` the timestep [s]. Returns the thrust + attitude setpoint.
   PositionControllerOutput update(const Eigen::Ref<const Eigen::Vector3d>& pos,
                                   const Eigen::Ref<const Eigen::Vector3d>& vel,
                                   const PositionSetpoint& sp, double dt);
 
  private:
-  // Clamp body_z to within tilt_max of vertical (0,0,1), preserving heading.
+  // Clamp body_z (the FLU up/thrust axis) to within tilt_max of vertical
+  // (0,0,1), preserving heading.
   void limitTilt(Eigen::Ref<Eigen::Vector3d> body_z) const;
 
   PositionControllerCfg cfg_;

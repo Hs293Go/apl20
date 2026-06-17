@@ -25,7 +25,8 @@ constexpr std::array<apl::Rotor<double>, 4> kX500Geometry = {{
     {.arm_x = -0.13, .arm_y = 0.20, .km = -0.05},  // 3: rear-left,   CW
 }};
 
-// Heading [rad] from a body->NED quaternion (the yaw of its ZYX Euler angles).
+// Heading [rad] from a body->world quaternion (the yaw of its ZYX Euler
+// angles). In ENU this is the heading about +z, CCW from +x (east).
 double Heading(const Eigen::Quaterniond& q) {
   return std::atan2(2.0 * (q.w() * q.z() + q.x() * q.y()),
                     1.0 - 2.0 * (q.y() * q.y() + q.z() * q.z()));
@@ -186,7 +187,7 @@ void AutopilotNode::onPositionSetpoint(
   // pose so the reference starts where the vehicle is (no jump from a stale
   // target left over from another mode).
   if (mode_ != Mode::kPosition && captured_) {
-    position_ref_.reset(pos_ned_, vel_ned_, heading_);
+    position_ref_.reset(pos_enu_, vel_enu_, heading_);
   }
   sp_pos_ = Eigen::Vector3d(msg.pose.position.x, msg.pose.position.y,
                             msg.pose.position.z);
@@ -212,7 +213,7 @@ void AutopilotNode::onPath(const nav_msgs::msg::Path& msg) {
   // On entering path mode, re-seed the shaper at the current pose (no jump from
   // a stale target left over from another mode).
   if (mode_ != Mode::kPath && captured_) {
-    position_ref_.reset(pos_ned_, vel_ned_, heading_);
+    position_ref_.reset(pos_enu_, vel_enu_, heading_);
   }
   mode_ = Mode::kPath;
   setpoint_stamp_ = now();
@@ -242,18 +243,21 @@ void AutopilotNode::onAttitudeSetpoint(const msg::AttitudeTarget& m) {
 void AutopilotNode::onLocalPosition(
     const px4_msgs::msg::VehicleLocalPosition& msg) {
   if (msg.xy_valid && msg.z_valid) {
-    pos_ned_ = Eigen::Vector3d(msg.x, msg.y, msg.z);
-    vel_ned_ = Eigen::Vector3d(msg.vx, msg.vy, msg.vz);
+    // PX4 publishes NED; the cascade is ENU.
+    pos_enu_ = apl::InterconvertNedEnu(Eigen::Vector3d(msg.x, msg.y, msg.z));
+    vel_enu_ = apl::InterconvertNedEnu(Eigen::Vector3d(msg.vx, msg.vy, msg.vz));
     have_local_ = true;
   }
 }
 
 void AutopilotNode::onOdometry(const px4_msgs::msg::VehicleOdometry& msg) {
-  const Eigen::Quaterniond q(msg.q[0], msg.q[1], msg.q[2],
-                             msg.q[3]);  // w,x,y,z
-  const Eigen::Vector3d rate_meas(msg.angular_velocity[0],
-                                  msg.angular_velocity[1],
-                                  msg.angular_velocity[2]);
+  // PX4 odometry is FRD body -> NED world; convert to FLU body -> ENU world so
+  // the whole cascade runs in ENU/FLU. This is the only attitude/rate boundary.
+  const Eigen::Quaterniond q = apl::InterconvertAeroRos(
+      Eigen::Quaterniond(msg.q[0], msg.q[1], msg.q[2], msg.q[3]));  // w,x,y,z
+  const Eigen::Vector3d rate_meas = apl::InterconvertFluFrd(
+      Eigen::Vector3d(msg.angular_velocity[0], msg.angular_velocity[1],
+                      msg.angular_velocity[2]));
   double dt = 0.004;
   if (last_sample_us_) {
     dt = static_cast<double>(msg.timestamp_sample - *last_sample_us_) * 1e-6;
@@ -264,11 +268,11 @@ void AutopilotNode::onOdometry(const px4_msgs::msg::VehicleOdometry& msg) {
   // On the first valid local position, capture the start pose, seed the shapers
   // and prime the loops. The takeoff guard then climbs at the start heading.
   if (have_local_ && !captured_) {
-    start_pos_ = pos_ned_;
+    start_pos_ = pos_enu_;
     start_yaw_ = Heading(q);
     airborne_ = false;
-    position_ref_.reset(pos_ned_, vel_ned_, start_yaw_);
-    position_.reset(vel_ned_);
+    position_ref_.reset(pos_enu_, vel_enu_, start_yaw_);
+    position_.reset(vel_enu_);
     attitude_ref_.reset(q);
     rate_.reset(rate_meas);
     flight_start_us_ = msg.timestamp_sample;
@@ -325,8 +329,8 @@ std::pair<Eigen::Vector3d, double> AutopilotNode::step(
       // Sequence through the path once airborne: advance to the next waypoint
       // when settled within the acceptance radius (stop-and-go).
       if (airborne_ && path_idx_ + 1 < path_.size() &&
-          (pos_ned_ - path_[path_idx_].pos).norm() < accept_radius_ &&
-          vel_ned_.norm() < settle_speed_) {
+          (pos_enu_ - path_[path_idx_].pos).norm() < accept_radius_ &&
+          vel_enu_.norm() < settle_speed_) {
         ++path_idx_;
         RCLCPP_INFO(get_logger(), "reached waypoint %zu/%zu", path_idx_,
                     path_.size() - 1);
@@ -353,7 +357,7 @@ std::pair<Eigen::Vector3d, double> AutopilotNode::trackPosition(
     pos = Eigen::Vector3d(start_pos_.x(), start_pos_.y(), tgt_pos.z());
     yaw = start_yaw_;
     wp = -1;  // the takeoff climb is not a waypoint
-    if ((start_pos_.z() - pos_ned_.z()) > takeoff_alt_) {
+    if ((pos_enu_.z() - start_pos_.z()) > takeoff_alt_) {
       airborne_ = true;
       RCLCPP_INFO(get_logger(), "AIRBORNE -> tracking setpoints");
     }
@@ -362,10 +366,10 @@ std::pair<Eigen::Vector3d, double> AutopilotNode::trackPosition(
   if (recorder_.enabled() && flight_start_us_ && last_sample_us_) {
     const double t =
         static_cast<double>(*last_sample_us_ - *flight_start_us_) * 1e-6;
-    recorder_.record(t, wp, sp.position, sp.yaw, pos_ned_, heading_);
+    recorder_.record(t, wp, sp.position, sp.yaw, pos_enu_, heading_);
   }
   const apl::PositionControllerOutput pos_out =
-      position_.update(pos_ned_, vel_ned_, sp, dt);
+      position_.update(pos_enu_, vel_enu_, sp, dt);
   const Eigen::Vector3d torque = attitudeToTorque(
       q, pos_out.attitude_setpoint, rate_meas, pos_out.collective_thrust, dt);
   return {torque, pos_out.collective_thrust};
@@ -394,8 +398,10 @@ void AutopilotNode::publishOffboardControlMode() {
 
 void AutopilotNode::publishMotors(const Eigen::Vector3d& torque,
                                   double thrust) {
+  // The cascade emits FLU body torque; the allocator mirrors PX4's FRD rotor
+  // geometry, so convert at this (actuator) boundary. Collective is unsigned.
   const Eigen::Matrix<double, 4, 1> motors =
-      allocator_.allocate(torque, thrust);
+      allocator_.allocate(apl::InterconvertFluFrd(torque), thrust);
   const uint64_t t = nowUs();
   px4_msgs::msg::ActuatorMotors m;
   m.timestamp = t;
@@ -411,10 +417,10 @@ void AutopilotNode::publishPose(const Eigen::Quaterniond& q,
                                 const rclcpp::Time& stamp) {
   geometry_msgs::msg::PoseStamped p;
   p.header.stamp = stamp;
-  p.header.frame_id = "map";  // local NED (x north, y east, z down)
-  p.pose.position.x = pos_ned_.x();
-  p.pose.position.y = pos_ned_.y();
-  p.pose.position.z = pos_ned_.z();
+  p.header.frame_id = "map";  // local ENU (x east, y north, z up)
+  p.pose.position.x = pos_enu_.x();
+  p.pose.position.y = pos_enu_.y();
+  p.pose.position.z = pos_enu_.z();
   p.pose.orientation.w = q.w();
   p.pose.orientation.x = q.x();
   p.pose.orientation.y = q.y();

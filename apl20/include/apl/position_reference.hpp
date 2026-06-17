@@ -13,7 +13,7 @@ namespace apl {
 // Tuning for the position trajectory shaper. The per-axis velocity /
 // acceleration / jerk limits are what make the reference "achievable": a step
 // in the target pose is ramped through a jerk-bounded S-curve instead of
-// jumping, so the position controller below never sees a discontinuity. NED,
+// jumping, so the position controller below never sees a discontinuity. ENU,
 // [m] axes.
 struct PositionReferenceCfg {
   double kp_pos = 1.0;  // pos->vel sqrt-controller linear slope [1/s]
@@ -52,7 +52,7 @@ class PositionReference {
              const Eigen::Ref<const Eigen::Vector3d>& velocity, double yaw);
 
   // Advance the achievable trajectory one step toward the fixed target pose
-  // (`desired_pos` NED, `desired_yaw` heading [rad]) and emit it as a
+  // (`desired_pos` ENU, `desired_yaw` heading [rad]) and emit it as a
   // PositionSetpoint (position + velocity/acceleration feedforward + heading)
   // for the PositionController.
   PositionSetpoint update(const Eigen::Ref<const Eigen::Vector3d>& desired_pos,

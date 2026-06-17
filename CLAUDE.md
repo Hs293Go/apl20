@@ -71,6 +71,23 @@ Use `just` as far as possible, but the underlying build system is CMake.
   subscripts put `to` to the left of `from`, i.e. `\mathbf{R}_{ib}` is a
   rotation **from** body **to** world.
 
+## Frames
+
+- The whole codebase is **ENU world / FLU body** (ROS REP-103): x east, y north,
+  z up; gravity is `(0,0,-g)`; the FLU body z is the thrust (up) axis; yaw is
+  about +z, CCW from +x (east). Heading vectors are `(cos yaw, sin yaw, 0)`.
+- Aerospace `NED`/`FRD` (PX4, ArduPilot) appears **only** at the
+  flight-controller boundary. Convert there with `apl/conversions.hpp`
+  (`InterconvertNedEnu`, `InterconvertFluFrd`, `InterconvertAeroRos` — all
+  self-inverse involutions). The control allocator is the one in-tree exception:
+  it mirrors PX4's FRD `CA_ROTOR` geometry, so callers convert body torque
+  FLU→FRD immediately before `allocate()`.
+- Pure quaternion/SO(3) kernels (attitude controller/reference, rate controller,
+  PID, filters, shapers) are frame-blind: they need no change between
+  conventions as long as their inputs share one. Frame sign-flips live in the
+  position controller, mission patterns, and the FlightManager z-axis.
+- ArduPilot is supported only via a DDS path, never MAVLink.
+
 ## Commit messages
 
 - 5 lines maximum (subject + blank + ≤3 body lines).

@@ -7,11 +7,11 @@
 namespace apl20_ros {
 
 namespace {
-// A waypoint -> a PoseStamped (NED position + heading encoded as the yaw
-// quaternion about the NED down axis).
+// A waypoint -> a PoseStamped (ENU position + heading encoded as the yaw
+// quaternion about the ENU up axis).
 geometry_msgs::msg::PoseStamped ToPose(const apl::Waypoint<double>& wp) {
   geometry_msgs::msg::PoseStamped p;
-  p.header.frame_id = "map";  // local NED (x north, y east, z down)
+  p.header.frame_id = "map";  // local ENU (x east, y north, z up)
   p.pose.position.x = wp.position.x();
   p.pose.position.y = wp.position.y();
   p.pose.position.z = wp.position.z();
@@ -48,8 +48,8 @@ MissionPlayer::MissionPlayer(const rclcpp::NodeOptions& options)
 }
 
 nav_msgs::msg::Path MissionPlayer::buildPath() const {
-  // Pattern centred on the target pose, at the survey altitude (NED z = down).
-  const Eigen::Vector3d at(target_x_, target_y_, -target_altitude_);
+  // Pattern centred on the target pose, at the survey altitude (ENU z = up).
+  const Eigen::Vector3d at(target_x_, target_y_, target_altitude_);
   std::vector<apl::Waypoint<double>> wps;
   if (pattern_ == "square") {
     wps = apl::SquarePattern(at, square_side_, target_yaw_);

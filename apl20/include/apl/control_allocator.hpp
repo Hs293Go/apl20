@@ -13,7 +13,11 @@ namespace apl {
 
 // Reduced actuator-effectiveness matrix E (4 x NumMotors): maps per-motor
 // normalized thrust to the body wrench [tau_x, tau_y, tau_z, collective] (FRD,
-// thrust up = positive collective). `geometry` is one row per motor,
+// thrust up = positive collective). This is the flight-controller actuator
+// boundary: it mirrors PX4's FRD CA_ROTOR convention 1:1, so an ENU/FLU control
+// core must convert its body torque FLU->FRD (negate y, z; see
+// InterconvertFluFrd) before calling allocate(). `geometry` is one row per
+// motor,
 // [arm_x, arm_y, km] -- the rotor's body-frame arm [m] and the dimensionless
 // moment ratio km whose sign encodes spin direction (PX4's
 // CA_ROTOR{i}_{PX,PY,KM}). Per PX4's ActuatorEffectivenessRotors with axis
