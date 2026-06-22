@@ -7,34 +7,19 @@
 #include <cmath>
 
 #include "apl/attitude_controller.hpp"
+#include "apl/testing/matchers.hpp"
 
 using apl::AttitudeController;
 using apl::AttitudeControllerCfg;
+using apl::testing::AboutX;
+using apl::testing::AboutY;
+using apl::testing::AboutZ;
+using apl::testing::AllClose;
+using apl::testing::ExpMap;
+using apl::testing::Near;
+using apl::testing::QuaternionClose;
 
 namespace {
-
-bool Near(double a, double b, double tol = 1e-9) {
-  return std::abs(a - b) < tol;
-}
-
-Eigen::Quaterniond AboutX(double a) {
-  return Eigen::Quaterniond(Eigen::AngleAxisd(a, Eigen::Vector3d::UnitX()));
-}
-Eigen::Quaterniond AboutY(double a) {
-  return Eigen::Quaterniond(Eigen::AngleAxisd(a, Eigen::Vector3d::UnitY()));
-}
-Eigen::Quaterniond AboutZ(double a) {
-  return Eigen::Quaterniond(Eigen::AngleAxisd(a, Eigen::Vector3d::UnitZ()));
-}
-
-// exp map: rotation vector (angle*axis) -> unit quaternion.
-Eigen::Quaterniond ExpMap(const Eigen::Vector3d& rotvec) {
-  const double a = rotvec.norm();
-  if (a < 1e-15) {
-    return Eigen::Quaterniond::Identity();
-  }
-  return Eigen::Quaterniond(Eigen::AngleAxisd(a, rotvec / a));
-}
 
 // Zero attitude error => zero rate setpoint.
 TEST(AttitudeController, ZeroError) {
@@ -94,7 +79,7 @@ TEST(AttitudeController, YawFeedforward) {
   AttitudeController ctrl(cfg);
   Eigen::Vector3d r = ctrl.update(Eigen::Quaterniond::Identity(),
                                   Eigen::Quaterniond::Identity(), 0.3);
-  EXPECT_TRUE(Near(r.x(), 0.0) && Near(r.y(), 0.0) && Near(r.z(), 0.3))
+  EXPECT_TRUE(AllClose(r, Eigen::Vector3d(0.0, 0.0, 0.3)))
       << "yaw feedforward maps to body yaw rate";
 }
 
@@ -142,8 +127,7 @@ TEST(AttitudeController, Decomposition) {
         Eigen::AngleAxisd(eq.z(), Eigen::Vector3d::UnitZ()));
     const Eigen::Quaterniond qe_rec = swing * twist;
     const Eigen::Quaterniond qe = q.normalized().conjugate() * qd.normalized();
-    EXPECT_TRUE(std::abs(qe_rec.dot(qe)) > 1.0 - 1e-9)
-        << what;  // same rotation (+/-)
+    EXPECT_TRUE(QuaternionClose(qe_rec, qe)) << what;  // same rotation (+/-)
   };
   chk(Eigen::Quaterniond::Identity(), AboutZ(1.0) * AboutX(0.4),
       "decomp: level, coupled");

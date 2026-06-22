@@ -8,21 +8,17 @@
 #include <cmath>
 
 #include "apl/attitude_reference.hpp"
+#include "apl/testing/matchers.hpp"
 
 using apl::AttitudeReference;
 using apl::AttitudeReferenceCfg;
 using apl::AttitudeSetpoint;
 using apl::CombineAttitudeRate;
+using apl::testing::AboutX;
+using apl::testing::Near;
+using apl::testing::QuaternionClose;
 
 namespace {
-
-bool Near(double a, double b, double tol = 1e-9) {
-  return std::abs(a - b) < tol;
-}
-
-Eigen::Quaterniond AboutX(double a) {
-  return Eigen::Quaterniond(Eigen::AngleAxisd(a, Eigen::Vector3d::UnitX()));
-}
 
 // --- vectorized sqrt controller / input shaping ----------------------------
 
@@ -76,7 +72,7 @@ TEST(AttitudeReference, ShaperConverges) {
   for (int k = 0; k < 4000; ++k) {  // 10 s at 400 Hz
     sp = ref.update(desired, 0.0, 0.0025);
   }
-  EXPECT_TRUE(sp.attitude.angularDistance(desired) < 1e-4)
+  EXPECT_TRUE(QuaternionClose(sp.attitude, desired, 1e-4))
       << "shaper: target reaches desired";
   EXPECT_TRUE(sp.ang_vel_ff.norm() < 1e-4)
       << "shaper: feedforward decays to zero";
@@ -102,7 +98,7 @@ TEST(AttitudeReference, ShaperFeedforwardDisabled) {
   AttitudeReference ref(cfg);
   ref.reset(Eigen::Quaterniond::Identity());
   AttitudeSetpoint sp = ref.update(AboutX(0.5), 0.0, 0.0025);
-  EXPECT_TRUE(sp.attitude.angularDistance(AboutX(0.5)) < 1e-9)
+  EXPECT_TRUE(QuaternionClose(sp.attitude, AboutX(0.5), 1e-9))
       << "FF off: target == desired";
   EXPECT_TRUE(sp.ang_vel_ff.norm() < 1e-12) << "FF off: feedforward is zero";
 }

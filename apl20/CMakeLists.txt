@@ -157,6 +157,9 @@ if(BUILD_TESTING)
   # results.
   function(apl_add_gtest name)
     add_executable(${name} test/${name}.cpp)
+    # test/include holds shared test support (apl/testing/matchers.hpp).
+    target_include_directories(${name}
+                               PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/test/include)
     target_link_libraries(${name} PRIVATE ${ARGN} GTest::gtest_main)
     gtest_discover_tests(${name})
   endfunction()

@@ -6,16 +6,14 @@
 #include <cmath>
 
 #include "apl/mission.hpp"
+#include "apl/testing/matchers.hpp"
 
 using apl::LawnmowerPattern;
 using apl::SquarePattern;
 using apl::Waypoint;
+using apl::testing::Near;
 
 namespace {
-
-bool Near(double a, double b, double tol = 1e-9) {
-  return std::abs(a - b) < tol;
-}
 
 bool At(const Waypoint<double>& wp, double x, double y, double z) {
   return Near(wp.position.x(), x) && Near(wp.position.y(), y) &&

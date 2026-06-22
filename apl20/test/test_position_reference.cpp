@@ -8,16 +8,14 @@
 #include <cmath>
 
 #include "apl/position_reference.hpp"
+#include "apl/testing/matchers.hpp"
 
 using apl::PositionReference;
 using apl::PositionReferenceCfg;
 using apl::PositionSetpoint;
+using apl::testing::Near;
 
 namespace {
-
-bool Near(double a, double b, double tol = 1e-9) {
-  return std::abs(a - b) < tol;
-}
 
 // Smooth takeoff: from rest on the ground, a step climb command does NOT jump
 // -- the first acceleration is jerk-limited (ramps from zero) and the position
