@@ -1,0 +1,17 @@
+# apl20 gains for the iris (TWR 2) airframe -- overrides apl20's x500 defaults.
+#
+# The only genuine iris-vs-x500 difference is the hover operating point: hover collective
+# = 1/TWR = 1/2 = 0.5, versus the x500's 0.70. Arm geometry + motor coefficient (KM) are
+# ~identical between the two, so apl20's hard-coded allocator and the inner control loops
+# carry over unchanged -- no other override is needed.
+#
+# Load it as a TYPED double via --params-file. (The autopilot.launch.py `hover_thrust:=`
+# arg is a launch-config STRING that silently fails to override the `double` param, so the
+# launch file leaves the x500's 0.70; --params-file with a YAML float is a real double.)
+#
+#   ros2 run apl20_ros autopilot_node --ros-args --params-file <path to this file>
+#
+# Key `/autopilot` = the node's name (autopilot_node.cpp: `Node("autopilot", ...)`).
+/autopilot:
+  ros__parameters:
+    hover_thrust: 0.5

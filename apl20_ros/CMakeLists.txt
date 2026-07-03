@@ -49,6 +49,7 @@ install(TARGETS autopilot_node mission_player DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY include/ DESTINATION include)
 install(PROGRAMS scripts/track_analyze.py DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
 
 # Linting is handled project-wide by clang-format / clang-tidy via pre-commit
 # (see .pre-commit-config.yaml, .clang-tidy), not ament_lint. Node unit tests,
