@@ -6,7 +6,7 @@ build *extra_cmake_args:
   -DCMAKE_POLICY_DEFAULT_CMP0148=OLD \
   -DCMAKE_POLICY_DEFAULT_CMP0167=NEW \
   -DCMAKE_INSTALL_MESSAGE=LAZY \
-  {{extra_cmake_args}}
+  {{extra_cmake_args}} | grep -v "[Ll]isting\|[Ss]ymlink\|[Ww]riting"
 
 test: build
   rm -rf ../../build/apl20/test_results ../../build/apl20_ros/test_results
