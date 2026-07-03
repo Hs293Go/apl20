@@ -3,6 +3,36 @@
 Long-form narrative for `apl20`. Newest entries on top. Commits reference an
 entry by number, e.g. `See CHANGELOG entry 1.`
 
+## 10. Safe direct-actuator offboard: operator-gated arming + honest thrust setpoint
+
+Two fixes to the offboard `actuator_motors` path so it respects the vehicle's
+actual armed/offboard state rather than forcing and faking it.
+
+**Arming becomes the operator's decision.** The node used to stream a non-zero
+(hover) collective every cycle and, via `maybeRequestOffboardArm`, self-command
+`DO_SET_MODE→OFFBOARD` + `ARM` ~1 s after the first odometry — so it armed itself
+and the props jumped straight to hover. Now the motors are driven only when PX4
+reports the vehicle *actually* armed AND in offboard (`isEngaged`); until then
+they are commanded explicitly stopped (all-NaN `ActuatorMotors`) while the
+`OffboardControlMode` heartbeat keeps offboard *selectable*. On the
+disengaged→engaged edge the shapers and loops re-seed at the current pose
+(`seedControllers`), so control starts from where the vehicle is and the takeoff
+guard climbs from the ground — no stale-hover jump. The old self-arming handshake
+is retained behind `auto_engage` (default false; `autopilot.launch.py` exposes
+it) for headless SITL.
+
+**An honest thrust setpoint keeps the land detector sane.** In direct-actuator
+offboard PX4 runs no allocation, so `vehicle_thrust_setpoint` is never populated
+and sits at zero. PX4's `MulticopterLandDetector` reads throttle = `-xyz[2]` from
+it, so a zero setpoint reads as zero throttle: on a *settled* hover the
+low-throttle and minimum-thrust conditions latch and it walks ground_contact →
+maybe_landed → landed, auto-disarming mid-air. The node now mirrors the
+collective/torque it allocates onto `vehicle_thrust_setpoint` (`xyz.z =
+-collective`, so the detector's `-xyz[2]` is the true throttle) and
+`vehicle_torque_setpoint`, published only while engaged (from `publishMotors`, so
+PX4 owns those topics in every other mode). apl20 keeps its own control allocator
+(`direct_actuator`); the setpoints exist purely to feed the detector and logging.
+
 ## 9. Waypoint missions + tracking-performance recording
 
 The single target pose became a **waypoint mission**. `apl::mission` (header-only)

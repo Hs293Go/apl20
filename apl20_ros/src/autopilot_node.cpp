@@ -48,6 +48,9 @@ AutopilotNode::AutopilotNode(const rclcpp::NodeOptions& options)
   setpoint_timeout_ = declare_parameter<double>("setpoint_timeout", 0.5);
   accept_radius_ = declare_parameter<double>("accept_radius", 0.4);
   settle_speed_ = declare_parameter<double>("settle_speed", 0.4);
+  // Off by default: a real vehicle only ever arms on an explicit operator
+  // command. Set true for headless SITL to self-command offboard + arm.
+  auto_engage_ = declare_parameter<bool>("auto_engage", false);
 
   // Setpoints in: MAVROS-style topics, most-recent level wins (see the class
   // comment). Plain default QoS -- these come from a commander, not PX4.
@@ -78,6 +81,12 @@ AutopilotNode::AutopilotNode(const rclcpp::NodeOptions& options)
       "/fmu/in/offboard_control_mode", qos);
   motors_pub_ = create_publisher<px4_msgs::msg::ActuatorMotors>(
       "/fmu/in/actuator_motors", qos);
+  // Thrust/torque setpoints mirror the actuator command purely so PX4's land
+  // detector (and logging) see the true throttle -- see publishThrustTorque.
+  thrust_sp_pub_ = create_publisher<px4_msgs::msg::VehicleThrustSetpoint>(
+      "/fmu/in/vehicle_thrust_setpoint", qos);
+  torque_sp_pub_ = create_publisher<px4_msgs::msg::VehicleTorqueSetpoint>(
+      "/fmu/in/vehicle_torque_setpoint", qos);
   cmd_pub_ = create_publisher<px4_msgs::msg::VehicleCommand>(
       "/fmu/in/vehicle_command", qos);
 
@@ -265,38 +274,44 @@ void AutopilotNode::onOdometry(const px4_msgs::msg::VehicleOdometry& msg) {
   last_sample_us_ = msg.timestamp_sample;
   heading_ = Heading(q);
 
-  // On the first valid local position, capture the start pose, seed the shapers
-  // and prime the loops. The takeoff guard then climbs at the start heading.
+  // On the first valid local position, prime the loops so we are ready the
+  // moment the operator engages (they are re-seeded again on that edge).
   if (have_local_ && !captured_) {
-    start_pos_ = pos_enu_;
-    start_yaw_ = Heading(q);
-    airborne_ = false;
-    position_ref_.reset(pos_enu_, vel_enu_, start_yaw_);
-    position_.reset(vel_enu_);
-    attitude_ref_.reset(q);
-    rate_.reset(rate_meas);
-    flight_start_us_ = msg.timestamp_sample;
+    seedControllers(q, rate_meas, msg.timestamp_sample);
     captured_ = true;
     RCLCPP_INFO(get_logger(), "Captured start pose; ready for setpoints.");
   }
 
-  // Heartbeat + pose out every cycle (>2 Hz) to keep offboard valid and feed a
-  // commander.
+  // Heartbeat + pose out every cycle (>2 Hz) to keep offboard *available* and
+  // feed a commander -- streamed whether or not we are engaged.
   publishOffboardControlMode();
   if (have_local_) {
     publishPose(q, now());
   }
 
-  if (captured_) {
+  // Drive the motors only once the vehicle is actually armed AND in offboard --
+  // arming is the operator's/GCS's decision, never the node's, so it never
+  // spins props on its own. Until then, command them explicitly stopped. On the
+  // disengaged->engaged edge, re-seed the loops at the current pose so control
+  // starts from where the vehicle is (no stale hover; the takeoff guard then
+  // climbs from the ground).
+  const bool engaged = captured_ && isEngaged();
+  if (engaged) {
+    if (!engaged_) {
+      seedControllers(q, rate_meas, msg.timestamp_sample);
+      RCLCPP_INFO(get_logger(), "ENGAGED (armed + offboard) -> controlling.");
+    }
     const std::pair<Eigen::Vector3d, double> out = step(q, rate_meas, dt);
     publishMotors(out.first, out.second);
   } else {
-    publishMotors(Eigen::Vector3d::Zero(),
-                  seed_thrust_);  // idle, hold offboard
+    publishMotorsStopped();
   }
+  engaged_ = engaged;
 
   ++setpoint_count_;
-  maybeRequestOffboardArm();
+  if (auto_engage_) {
+    maybeRequestOffboardArm();
+  }
 }
 
 std::pair<Eigen::Vector3d, double> AutopilotNode::step(
@@ -400,8 +415,8 @@ void AutopilotNode::publishMotors(const Eigen::Vector3d& torque,
                                   double thrust) {
   // The cascade emits FLU body torque; the allocator mirrors PX4's FRD rotor
   // geometry, so convert at this (actuator) boundary. Collective is unsigned.
-  const Eigen::Matrix<double, 4, 1> motors =
-      allocator_.allocate(apl::InterconvertFluFrd(torque), thrust);
+  const Eigen::Vector3d torque_frd = apl::InterconvertFluFrd(torque);
+  const Eigen::Vector4d motors = allocator_.allocate(torque_frd, thrust);
   const uint64_t t = nowUs();
   px4_msgs::msg::ActuatorMotors m;
   m.timestamp = t;
@@ -411,6 +426,54 @@ void AutopilotNode::publishMotors(const Eigen::Vector3d& torque,
     m.control[i] = static_cast<float>(motors[i]);
   }
   motors_pub_->publish(m);
+  publishThrustTorque(torque_frd, thrust, t);
+}
+
+void AutopilotNode::publishThrustTorque(const Eigen::Vector3d& torque_frd,
+                                        double thrust, uint64_t stamp_us) {
+  // PX4 normalizes multicopter thrust along body -z (up), so z = -collective;
+  // the land detector reads throttle = -xyz[2]. Only ever published while
+  // engaged (from publishMotors) -- when not engaged PX4 owns these topics.
+  px4_msgs::msg::VehicleThrustSetpoint ts;
+  ts.timestamp = stamp_us;
+  ts.timestamp_sample = stamp_us;
+  ts.xyz = {0.0F, 0.0F, static_cast<float>(-thrust)};
+  thrust_sp_pub_->publish(ts);
+
+  px4_msgs::msg::VehicleTorqueSetpoint qs;
+  qs.timestamp = stamp_us;
+  qs.timestamp_sample = stamp_us;
+  Eigen::Vector3f::Map(qs.xyz.data()) = torque_frd.cast<float>();
+  torque_sp_pub_->publish(qs);
+}
+
+void AutopilotNode::publishMotorsStopped() {
+  // All-NaN control is ActuatorMotors' "stopped" sentinel: the props stay off
+  // while the offboard heartbeat keeps offboard selectable for the operator.
+  const uint64_t t = nowUs();
+  px4_msgs::msg::ActuatorMotors m;
+  m.timestamp = t;
+  m.timestamp_sample = t;
+  m.control.fill(std::numeric_limits<float>::quiet_NaN());
+  motors_pub_->publish(m);
+}
+
+void AutopilotNode::seedControllers(const Eigen::Quaterniond& q,
+                                    const Eigen::Vector3d& rate_meas,
+                                    uint64_t sample_us) {
+  start_pos_ = pos_enu_;
+  start_yaw_ = Heading(q);
+  airborne_ = false;
+  position_ref_.reset(pos_enu_, vel_enu_, start_yaw_);
+  position_.reset(vel_enu_);
+  attitude_ref_.reset(q);
+  rate_.reset(rate_meas);
+  flight_start_us_ = sample_us;
+}
+
+bool AutopilotNode::isEngaged() const {
+  return arming_state_ == px4_msgs::msg::VehicleStatus::ARMING_STATE_ARMED &&
+         nav_state_ == px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD;
 }
 
 void AutopilotNode::publishPose(const Eigen::Quaterniond& q,

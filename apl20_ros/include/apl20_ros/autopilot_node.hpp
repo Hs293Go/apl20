@@ -13,6 +13,8 @@
 #include <px4_msgs/msg/vehicle_local_position.hpp>
 #include <px4_msgs/msg/vehicle_odometry.hpp>
 #include <px4_msgs/msg/vehicle_status.hpp>
+#include <px4_msgs/msg/vehicle_thrust_setpoint.hpp>
+#include <px4_msgs/msg/vehicle_torque_setpoint.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <string>
 #include <utility>
@@ -51,10 +53,13 @@ namespace apl20_ros {
 // FRD body rates) are converted to ENU/FLU at ingestion (the only frame
 // boundary; the whole cascade is ENU/FLU). VehicleLocalPosition feeds the
 // position loop; VehicleOdometry feeds the inner loops and is the loop clock.
-// Until armed and
-// climbed past `takeoff_alt`, a takeoff guard holds the start xy + heading and
-// only climbs (the grounded vehicle cannot yaw/translate without the saturated
-// torque starving the climb), so a bare position `topic pub` lifts off cleanly.
+// The motors stay commanded-stopped until the vehicle is actually armed AND in
+// offboard -- arming is the operator's decision (e.g. via the GCS), never the
+// node's. Once engaged, a takeoff guard holds the start xy + heading and only
+// climbs past `takeoff_alt` (the grounded vehicle cannot yaw/translate without
+// the saturated torque starving the climb), so a position setpoint lifts off
+// cleanly. `auto_engage:=true` restores the self-command offboard+arm handshake
+// for headless SITL.
 // It republishes the vehicle pose on ~/local_position/pose and, if `track_log`
 // is set, logs the shaped reference vs the measured pose to CSV.
 class AutopilotNode : public rclcpp::Node {
@@ -106,9 +111,26 @@ class AutopilotNode : public rclcpp::Node {
 
   void publishOffboardControlMode();
   void publishMotors(const Eigen::Vector3d& torque, double thrust);
+  // Mirror the FRD collective/torque we are allocating onto the thrust/torque
+  // setpoint topics. PX4 runs no allocation in direct-actuator offboard, so it
+  // never populates these -- and the land detector reads the zero thrust
+  // setpoint as a zero throttle and false-triggers "landed" on a settled hover
+  // (auto-disarm). Publishing the true collective keeps its throttle honest.
+  void publishThrustTorque(const Eigen::Vector3d& torque_frd, double thrust,
+                           uint64_t stamp_us);
+  // Command the motors explicitly stopped (all-NaN) -- streamed whenever we are
+  // not engaged, so props stay off while the offboard heartbeat keeps flowing.
+  void publishMotorsStopped();
   void publishPose(const Eigen::Quaterniond& q, const rclcpp::Time& stamp);
   void sendVehicleCommand(uint16_t command, float param1, float param2);
   void maybeRequestOffboardArm();
+  // True only when PX4 reports the vehicle actually armed AND in offboard --
+  // the gate for driving the motors.
+  bool isEngaged() const;
+  // Seed the shapers + loops at the current pose/rate: on the first fix, and
+  // again on the disengaged->engaged edge so control starts from where we are.
+  void seedControllers(const Eigen::Quaterniond& q,
+                       const Eigen::Vector3d& rate_meas, uint64_t sample_us);
   uint64_t nowUs() const;
 
   apl::PositionController position_;
@@ -155,6 +177,8 @@ class AutopilotNode : public rclcpp::Node {
   int setpoint_count_ = 0;
   uint8_t arming_state_ = 0;
   uint8_t nav_state_ = 0;
+  bool auto_engage_ = false;  // opt-in: self-command offboard + arm (SITL only)
+  bool engaged_ = false;      // armed+offboard last cycle (engage-edge detect)
 
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pos_sp_sub_;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_sub_;
@@ -164,6 +188,10 @@ class AutopilotNode : public rclcpp::Node {
   rclcpp::SubscriptionBase::SharedPtr status_sub_;
   rclcpp::Publisher<px4_msgs::msg::OffboardControlMode>::SharedPtr ocm_pub_;
   rclcpp::Publisher<px4_msgs::msg::ActuatorMotors>::SharedPtr motors_pub_;
+  rclcpp::Publisher<px4_msgs::msg::VehicleThrustSetpoint>::SharedPtr
+      thrust_sp_pub_;
+  rclcpp::Publisher<px4_msgs::msg::VehicleTorqueSetpoint>::SharedPtr
+      torque_sp_pub_;
   rclcpp::Publisher<px4_msgs::msg::VehicleCommand>::SharedPtr cmd_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
 };

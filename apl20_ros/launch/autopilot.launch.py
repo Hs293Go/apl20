@@ -62,6 +62,12 @@ def generate_launch_description():
             description="CSV path for the shaped-reference-vs-measured tracking "
             "log ('' disables).",
         ),
+        DeclareLaunchArgument(
+            "auto_engage",
+            default_value="false",
+            description="Self-command offboard + arm once setpoints stream "
+            "(headless SITL only). Off by default: the operator/GCS arms.",
+        ),
     ]
 
     agent = ExecuteProcess(
@@ -81,6 +87,7 @@ def generate_launch_description():
                 "accept_radius": LaunchConfiguration("accept_radius"),
                 "settle_speed": LaunchConfiguration("settle_speed"),
                 "track_log": LaunchConfiguration("track_log"),
+                "auto_engage": LaunchConfiguration("auto_engage"),
             }
         ],
     )
