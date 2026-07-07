@@ -272,6 +272,15 @@ void AutopilotNode::onOdometry(const px4_msgs::msg::VehicleOdometry& msg) {
     dt = static_cast<double>(msg.timestamp_sample - *last_sample_us_) * 1e-6;
   }
   last_sample_us_ = msg.timestamp_sample;
+  // The HIL/uXRCE odometry timestamp_sample periodically jumps BACKWARD (~-340
+  // ms when sim-time resyncs against the agent clock), yielding a negative dt
+  // that detonates the rate PID's derivative/integral into a one-sample motor
+  // spike -- the diagonal "dart". The state itself is continuous across the
+  // jump, so clamp dt to a sane range and keep controlling; a bad timestamp
+  // must never reach the cascade.
+  if (dt <= 0.0 || dt > 0.05) {
+    dt = 0.0107;  // ~93 Hz nominal
+  }
   heading_ = Heading(q);
 
   // On the first valid local position, prime the loops so we are ready the
